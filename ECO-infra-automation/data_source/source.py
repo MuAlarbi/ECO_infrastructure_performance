@@ -312,11 +312,11 @@ The function performs the following steps:
    
     # file_size = int(input("Enter file size in MB: "))
     file_size = 1
-    files_directory = ''
+    files_directory = 'upload_files/'
 
     total_size = 0
     number_of_files = 0
-    while number_of_files <1:
+    while number_of_files <=10:
         total_size += file_size
         number_of_files += 1
         file_name = f"file_{file_size}.txt"

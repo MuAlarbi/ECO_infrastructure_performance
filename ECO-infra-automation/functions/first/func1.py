@@ -1,4 +1,4 @@
-from fastapi import Form, File, UploadFile, Request, FastAPI, Depends,HTTPException
+from fastapi import Form, File, UploadFile, Request, FastAPI, Depends
 from typing import List
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
@@ -11,27 +11,10 @@ import re
 import platform
 import requests
 import aiohttp
-from motor.motor_asyncio import AsyncIOMotorClient
 
-
-
-app = FastAPI() 
-# MongoDB connection details
-MONGO_DETAILS = "mongodb://localhost:27017"
-DATABASE = "metrics_database"  
-
-
-client = AsyncIOMotorClient(MONGO_DETAILS)
-db = client[DATABASE]
-
-collection = db["eco_local_test"]
-
-
+app = FastAPI()
 templates = Jinja2Templates(directory="templates")
-
-results = list()
-
-
+# DevelopmentAndTesting
 def calculate_transmission_rate(file_size_bytes, upload_latency_ms):
     # Convert file size to bits
     file_size_bits = file_size_bytes * 8
@@ -46,10 +29,11 @@ def calculate_transmission_rate(file_size_bytes, upload_latency_ms):
     transmission_rate_mbps = transmission_rate_bps / 1e6
 
     return transmission_rate_mbps
+
 class LatencyTracker(BaseModel):
-    func2_called_func3: int
-    func3_receivedAt: Optional[int] = None
-    latency_to_func3: Optional[int] = None
+    source_called_func1: int
+    fun1_receivedAt: Optional[int] = None
+    latency_to_func1: Optional[int] = None
     file_size: Optional[int] = None
     file_name: Optional[str] = None
 
@@ -88,7 +72,7 @@ class Metrics(BaseModel):
     # func3_sink_numberOfHops: Optional[list] = None
     # func3_sink_uploadLatency: Optional[list] = None
     # func3_sink_bandwidth: Optional[list] = None
-    # end_to_end_latency: Optional[int] = None
+    # end_to_end_latency: Optional[int] = None,
     func1_host: Optional[str] = None, 
     func2_host: Optional[str] = None,
     func3_host: Optional[str] = None,
@@ -97,28 +81,6 @@ class Metrics(BaseModel):
     telco_provider: Optional[str] = None,
     collection_name: Optional[str] = None
 
-async def write_to_collection(name: str):
-
-    document = {"name": name}
-    result = await collection.insert_one(document)
-    print("expriment record inserted with id: ", result.inserted_id)
-    return result.inserted_id
-
-
-async def add_to_collection(metrics: Metrics, collection_name: str = "eco_local_test"):
-
-    try:
-        print("Inside add_to_collection")
-        collection = db[collection_name]
-        inserted_id = await collection.insert_one(metrics.dict())
-        print("#### inserted_id: ",inserted_id)
-        return {"inserted_id": str(inserted_id)}
-    except Exception as e:
-        print("#### Exception: ",e)
-        raise HTTPException(status_code=500, detail=str(e))
-    
-
-metricsList = []
 
 
 def get_latency_and_packet_loss(server_url, number_of_requests):
@@ -131,7 +93,7 @@ def get_latency_and_packet_loss(server_url, number_of_requests):
     # find os default TTL using the following commmnads 
     # MAC_OS sysctl net.inet.ip.ttl
     # LINUX sysctl net.ipv4.ip_default_ttl
-    defualtTTL = 256
+    defualtTTL = 64
     numberOfHops = []
     lines = ping_result[0].decode('utf-8').split("\n")
     for lineIdx in range(1,len(lines)-5):
@@ -144,97 +106,108 @@ def get_latency_and_packet_loss(server_url, number_of_requests):
             print("found ping request timed out")
     return latency_statitcs, packet_loss, numberOfHops
 
-
-@app.post("/function3")
+@app.post("/function1")
 def submit(latencyTracker: LatencyTracker = Depends(), files: List[UploadFile] = File(...)):
-    latencyTracker.func3_receivedAt = int(time.time() * 1000)
-    latencyTracker.latency_to_func3 = latencyTracker.func3_receivedAt - latencyTracker.func2_called_func3
+    latencyTracker.fun1_receivedAt = int(time.time() * 1000)
+    latencyTracker.latency_to_func1 = latencyTracker.fun1_receivedAt - latencyTracker.source_called_func1
     # Now, you can pass the filename to the request
     file_contents = files[0].file.read()
     with open(files[0].filename, "wb") as f:
         f.write(file_contents)
-
-    print(f"!!!!!! file {files[0].filename} arrived at func3 with size = {os.path.getsize(files[0].filename)} ")
+    print(f"!!!!!! file {files[0].filename} arrived at func1 with size = {os.path.getsize(files[0].filename)} ")
     return {
         "JSON Payload ": latencyTracker.dict()}
 
-def upload_metrics_next_3(file_path,file_name, url):
+
+def upload_metrics_next_func(file_path,filename, url):
+    # file_path = os.path.join(files_directory, filename)
+    
+    # Check if the item is a file (not a directory)
+    if not os.path.isfile(file_path):
+        print(f"############### file {file_path} does not exist ############### ")
+        return None, None
     upload_latency_next_func = []
     bandwidth_next_func = []
-    file_size_bytes = os.path.getsize(file_path)
-    files = [('files', (file_name, open(file_path, 'rb')))]
-    # Create a tuple with the file data 
-    payload = {"func2_called_func3": int(time.time() * 1000),"file_name": file_name, "file_size": os.path.getsize(file_path)}
-
     for i in range(10):
         # Send the file to the next function
         print("uploading file to next function. iteration: ",i)
+        file_size_bytes = os.path.getsize(file_path)
+        files = [('files', (filename, open(file_path, 'rb')))]
+        
+        payload = {"func1_called_func2": int(time.time() * 1000),"file_name": filename, "file_size": os.path.getsize(file_path)}
         resp = requests.post(url=url, params=payload, files=files) 
         # Print the response
         if resp.status_code == 200:
-            latency_to_func = resp.json()['JSON Payload ']['latency_to_sink']
+            latency_to_func = resp.json()['JSON Payload ']['latency_to_func2']
             upload_latency_next_func.append(latency_to_func)
             # Calculate bandwidth in Mbps (Megabits per second)
             bandwidth_Mbps = calculate_transmission_rate(file_size_bytes, latency_to_func)
-           
             bandwidth_next_func.append(bandwidth_Mbps)
             if latency_to_func is not None:
-                print(f'Sent {file_name}, Latency to sink: {latency_to_func} ms')
+                print(f'Sent {filename}, Latency to func2: {latency_to_func} ms')
             else:
-                print(f'Sent {file_name}, Response does not contain latency_to_next_func')
+                print(f'Sent {filename}, Response does not contain latency_to_next_func')
         else:
-            print(f'Sent {file_name}, Error: {resp.status_code}')
+            print(f'Sent {filename}, Error: {resp.status_code}')
     
     return upload_latency_next_func, bandwidth_next_func
 
 async def send_data_async(url, payload):
     async with aiohttp.ClientSession() as session:
         await session.post(url, json=payload)
+
 @app.post("/metrics")
 async def receive_metrics(metrics: Metrics):
-    print("##############################################################################################################")
-    print("##############################################################################################################")
-    print("###################################### PIPELINE METRICS ######################################################")
-    print("##############################################################################################################")
-    print("##############################################################################################################")
+    # Do something with the metrics here.
+    nextUrl = "http://"+metrics.func2_host+':8002/function2'
+    print("func1 metrics received",metrics)
 
-    # print("func3 metrics received",metrics.model_dump_json())
-    results.append(metrics)
+    print("=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=")
 
-    url = f"https://nhionvk7u2.execute-api.ca-central-1.amazonaws.com?collection_name={metrics.collection_name}"
+    print("pinging function 2 host to collect latency packet_loss and numberOfHops metrics ...")
+    latency_metrics, packet_loss, numberOfHops = get_latency_and_packet_loss(metrics.func2_host,10)
+    print("Sending files to function 2 to collect upload latency and bandwidth metrics ...")
+    file_path = os.path.join("/", metrics.file_name)
+    upload_latency_next_func, bandwidth_next_func = upload_metrics_next_func(metrics.file_name, metrics.file_name, nextUrl)
 
-    data = metrics.dict()
-    response = requests.post(url, json=data)
-    # Check the response (assuming it's JSON)
-    response_data = response.json()
-    print("metrics sent to the database")
-   
-
-@app.get("/", response_class=HTMLResponse)
-def main():
-    return "This is the main page of the function 3."
-
-
-@app.get("/results")
-def getResults():
-    return results
-
-
-@app.get("/latest_record_file_name/{collection_name}/")
-async def get_latest_record_file_name(collection_name: str):
-
-    # Dynamically access the collection
-    collection = db[collection_name]
-    # Fetch only the 'file_name' field of the most recent document
-    latest_document = await collection.find_one({}, sort=[("_id", -1)], projection={"file_name": 1, "_id": 0})
-    if latest_document:
-        return latest_document.get("file_name")
-    else:
-        return {"message": "No records found"}
-
-# python3 -m uvicorn func3_async:app --host 0.0.0.0 --port 8003 --reload
-# source ~/venv-metal/bin/activate
+    payload = {
+            "source_func1_latency_metrics": metrics.source_func1_latency_metrics,
+            "source_func1_packet_loss":metrics.source_func1_packet_loss,
+            "source_func1_numberOfHops":metrics.source_func1_numberOfHops,
+            "source_func1_uploadLatency":metrics.source_func1_uploadLatency,
+            "source_func1_bandwidth":metrics.source_func1_bandwidth,
+            "func1_func2_latency_metrics": latency_metrics,
+            "func1_func2_packet_loss":packet_loss,
+            "func1_func2_numberOfHops":numberOfHops,
+            "func1_func2_uploadLatency":upload_latency_next_func,
+            "func1_func2_bandwidth":bandwidth_next_func,
+            "file_name": metrics.file_name,
+            "file_size": os.path.getsize(metrics.file_name),
+            "func1_host": metrics.func1_host, 
+            "func2_host": metrics.func2_host,
+            "func3_host": metrics.func3_host,
+            "expr_code" : metrics.expr_code, 
+            "country_code" : metrics.country_code,
+            "source_city" : metrics.source_city,
+            "telco_provider" : metrics.telco_provider,
+            "deployment_config" : metrics.deployment_config,
+            "collection_name" : metrics.collection_name
+            }
     
+    if os.path.isfile(metrics.file_name):
+        print("####### file_size_at func1",os.path.getsize(metrics.file_name))
+    else:
+        print("####### file does not exist at func1")
+
+    print("=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- payload to func2 metrics=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=")
+    print("payload: ",payload)
+    next_url = f"http://{metrics.func2_host}:8002/metrics"
+    await send_data_async(next_url, payload)
+@app.get("/")
+def main():
+    return "This is function 1"
+
+# python3 -m uvicorn func1_async:app --host 0.0.0.0 --port 8001 --reload
 
 
 # docker-compose up --build
